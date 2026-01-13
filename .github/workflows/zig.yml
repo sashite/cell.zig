@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test Zig ${{ matrix.zig }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        zig:
+          - "0.15.0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: ${{ matrix.zig }}
+
+      - name: Check formatting
+        run: zig fmt --check src/
+
+      - name: Run tests
+        run: zig build test

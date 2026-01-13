@@ -1,0 +1,14 @@
+.{
+    .name = .sashite_cell,
+    .version = "1.0.0",
+    .fingerprint = 0x9ca41011ae0242fc,
+    .minimum_zig_version = "0.15.0",
+    .paths = .{
+        "src",
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+        "README.md",
+    },
+    .dependencies = .{},
+}
