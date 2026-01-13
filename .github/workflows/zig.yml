@@ -15,13 +15,13 @@ jobs:
       fail-fast: false
       matrix:
         zig:
-          - "0.15.0"
+          - "0.15.2"
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Zig
-        uses: mlugg/setup-zig@v1
+        uses: mlugg/setup-zig@v2
         with:
           version: ${{ matrix.zig }}
 
