@@ -1,19 +1,23 @@
-# sashite_cell.zig
+# cell.zig
 
 [![Zig](https://img.shields.io/badge/Zig-0.15.0-f7a41d?logo=zig)](https://ziglang.org/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License](https://img.shields.io/github/license/sashite/cell.zig)](https://github.com/sashite/cell.zig/blob/main/LICENSE)
 
-> Idiomatic Zig implementation of the [CELL Specification v1.0.0](https://sashite.dev/specs/cell/1.0.0/).
+> **CELL** (Coordinate Encoding for Layered Locations) implementation for Zig.
 
-## Implementation Constraints
+## Overview
 
-This library implements a constrained subset of CELL, enabling zero-allocation, stack-only operations:
+This library implements the [CELL Specification v1.0.0](https://sashite.dev/specs/cell/1.0.0/).
 
-| Constraint | Value |
-|------------|-------|
-| Maximum dimensions | 3 |
-| Maximum index value | 255 |
-| Maximum string length | 7 characters |
+### Implementation Constraints
+
+| Constraint | Value | Rationale |
+|------------|-------|-----------|
+| Max dimensions | 3 | Sufficient for 1D, 2D, 3D boards |
+| Max index value | 255 | Fits in `u8`, covers 256×256×256 boards |
+| Max string length | 7 | `"iv256IV"` (max for all dimensions at 255) |
+
+These constraints enable bounded memory usage and safe parsing without allocation.
 
 ## Installation
 
@@ -47,18 +51,14 @@ Convert a CELL string into a `Coordinate` struct.
 ```zig
 const cell = @import("sashite_cell");
 
-// Runtime parsing
+// Standard parsing (returns error)
 const coord = try cell.parse("e4");
-// coord.indices = { 4, 3, 0 }
-// coord.dimensions = 2
+std.debug.print("{any}\n", .{coord.slice()}); // { 4, 3 }
+std.debug.print("{}\n", .{coord.dimensions}); // 2
 
-// Access as slice
-const indices = coord.slice(); // []const u8{ 4, 3 }
-
-// Comptime parsing
-const static_coord = comptime cell.parseComptime("a1A");
-// static_coord.indices = { 0, 0, 0 }
-// static_coord.dimensions = 3
+// Comptime parsing (compile error if invalid)
+const c = comptime cell.parseComptime("a1A");
+std.debug.print("{any}\n", .{c.slice()}); // { 0, 0, 0 }
 ```
 
 ### Formatting (Coordinate → String)
@@ -69,45 +69,50 @@ Convert a `Coordinate` back to a CELL string.
 // From Coordinate struct
 const coord = cell.Coordinate.init(.{ 4, 3 });
 const formatted = cell.format(coord);
-// formatted.slice() = "e4"
+std.debug.print("{s}\n", .{formatted.slice()}); // "e4"
 
-// Writer (flexible output)
-var buf: [cell.max_string_len]u8 = undefined;
-var stream = std.io.fixedBufferStream(&buf);
-try cell.formatWrite(stream.writer(), coord);
-// stream.getWritten() = "e4"
+// Direct formatting (convenience)
+const s = cell.format(cell.Coordinate.init(.{ 2, 2, 2 }));
+std.debug.print("{s}\n", .{s.slice()}); // "c3C"
 ```
 
 ### Validation
 
 ```zig
-// Check validity (returns bool)
-if (cell.isValid("a1")) {
-    // ...
+// Boolean check
+if (cell.isValid("e4")) {
+    // valid coordinate
 }
 
-// Get detailed error
-cell.validate("a0") catch |err| switch (err) {
-    error.LeadingZero => std.debug.print("Zero not allowed\n", .{}),
-    else => {},
+// Detailed error
+cell.validate("a0") catch |err| {
+    std.debug.print("{}\n", .{err}); // error.LeadingZero
 };
+```
 
-// Compile-time validation
-comptime {
-    std.debug.assert(cell.isValid("a1"));
-    std.debug.assert(!cell.isValid("a0"));
-}
+### Accessing Coordinate Data
+
+```zig
+const coord = try cell.parse("e4");
+
+// Get dimensions count
+std.debug.print("{}\n", .{coord.dimensions}); // 2
+
+// Get indices as slice
+std.debug.print("{any}\n", .{coord.slice()}); // { 4, 3 }
+
+// Access individual index
+std.debug.print("{}\n", .{coord.indices[0]}); // 4
+std.debug.print("{}\n", .{coord.indices[1]}); // 3
 ```
 
 ## API Reference
 
-```zig
-// Constants
-pub const max_dimensions: u8 = 3;
-pub const max_index_value: u8 = 255;
-pub const max_string_len: u8 = 7;
+### Types
 
-// Coordinate type (0-indexed indices)
+```zig
+/// Coordinate represents a parsed CELL coordinate with up to 3 dimensions.
+/// Use Coordinate.init or parse to create.
 pub const Coordinate = struct {
     indices: [max_dimensions]u8,  // Unused positions are 0
     dimensions: u2,               // Valid range: 1, 2, 3
@@ -120,7 +125,7 @@ pub const Coordinate = struct {
     pub fn slice(self: *const Coordinate) []const u8;
 };
 
-// Formatted string type
+/// FormattedCoordinate holds the string representation of a Coordinate.
 pub const FormattedCoordinate = struct {
     buf: [max_string_len]u8,  // Unused positions are undefined
     len: u3,                  // Valid range: 1–7
@@ -128,29 +133,53 @@ pub const FormattedCoordinate = struct {
     /// Returns buf[0..len].
     pub fn slice(self: *const FormattedCoordinate) []const u8;
 };
+```
 
-// Parsing
+### Constants
+
+```zig
+pub const max_dimensions: u8 = 3;
+pub const max_index_value: u8 = 255;
+pub const max_string_len: u8 = 7;
+```
+
+### Parsing
+
+```zig
 /// Parses a CELL string into a Coordinate.
-pub fn parse(s: []const u8) ParseError!Coordinate
+/// Returns an error if the string is not valid.
+pub fn parse(s: []const u8) ParseError!Coordinate;
 
-/// Parses a CELL string at compile time. Triggers @compileError if invalid.
-pub fn parseComptime(comptime s: []const u8) Coordinate
+/// Parses a CELL string at compile time.
+/// Triggers @compileError if invalid.
+pub fn parseComptime(comptime s: []const u8) Coordinate;
+```
 
-// Formatting
+### Formatting
+
+```zig
 /// Formats a Coordinate into a CELL string.
-pub fn format(coord: Coordinate) FormattedCoordinate
+pub fn format(coord: Coordinate) FormattedCoordinate;
 
-/// Writes a formatted Coordinate to any writer. Returns writer errors only.
-pub fn formatWrite(writer: anytype, coord: Coordinate) @TypeOf(writer).Error!void
+/// Writes a formatted Coordinate to any writer.
+/// Returns writer errors only.
+pub fn formatWrite(writer: anytype, coord: Coordinate) @TypeOf(writer).Error!void;
+```
 
-// Validation
-/// Validates a CELL string and returns the specific error if invalid.
-pub fn validate(s: []const u8) ParseError!void
+### Validation
 
-/// Returns true if the string is a valid CELL coordinate.
-pub fn isValid(s: []const u8) bool
+```zig
+/// Validates a CELL string.
+/// Returns the specific error if invalid.
+pub fn validate(s: []const u8) ParseError!void;
 
-// Errors
+/// Reports whether s is a valid CELL coordinate.
+pub fn isValid(s: []const u8) bool;
+```
+
+### Errors
+
+```zig
 pub const ParseError = error{
     EmptyInput,          // String length is 0
     InputTooLong,        // String exceeds 7 characters
@@ -164,14 +193,12 @@ pub const ParseError = error{
 
 ## Design Principles
 
-This implementation follows Zig idioms:
-
-- **Zero allocation**: All operations use stack memory only.
-- **Bounded types**: `u8` indices and `u2` dimension count prevent overflow.
-- **Comptime evaluation**: `parseComptime` validates at compile time.
-- **Explicit errors**: Detailed `ParseError` variants for precise diagnostics.
-- **No hidden control flow**: Errors are explicit via error unions.
-- **No dependencies**: Pure Zig with zero external dependencies.
+- **Bounded types**: `u8` indices and `u2` dimension count prevent overflow
+- **Struct over slice**: `Coordinate` type enables methods and safety
+- **Explicit errors**: Detailed `ParseError` variants for precise diagnostics
+- **Comptime evaluation**: `parseComptime` validates at compile time
+- **No allocation**: All operations use stack memory only
+- **No dependencies**: Pure Zig standard library only
 
 ## Related Specifications
 
