@@ -198,4 +198,5 @@ test {
     _ = @import("tests/parse_tests.zig");
     _ = @import("tests/format_tests.zig");
     _ = @import("tests/round_trip_tests.zig");
+    _ = @import("tests/security_tests.zig");
 }
